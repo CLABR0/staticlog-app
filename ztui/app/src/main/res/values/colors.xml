@@ -1,0 +1,5 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 浅色：GhostLock 色板背景 #F7F8FA -->
+    <color name="window_background">#FFF7F8FA</color>
+</resources>
