@@ -18,6 +18,8 @@ Windows 用 `gradlew.bat`。
 
 ```
 ztui/            Android 工程（Gradle 9.3.1 wrapper 已带）
+server/          使用统计后端：标准库 Python + systemd + nginx，部署见 server/README.md
+docs/            需求清单与开发交接记录
 BUILD-APK.md     构建说明
 README-PACK.md   包内容说明：哪些东西没带、为什么
 ```
