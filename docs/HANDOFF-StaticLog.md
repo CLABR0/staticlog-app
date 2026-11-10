@@ -36,10 +36,10 @@
 
 | 产物 | 路径 | 状态 |
 |---|---|---|
-| APK（release，已签名） | `APK-发给你/StaticLog-V46-release.apk` 45.71 MB<br>sha256 `CF1C01A1DAC5F2F66C9756B7D5DA8EB6A6AB04371FE4A80EA4B72E031BF9F364` | 已构建 |
-| APK（debug） | `APK-发给你/StaticLog-V46-debug.apk` 53.03 MB<br>sha256 `74CA04C0525DEFBCC5BBD2602F37071E2D99C36C640C9EFAC44D1E5D6FE06D05` | 已构建 |
+| APK（release，已签名） | `APK-发给你/StaticLog-V47-release.apk` 45.71 MB<br>sha256 `BFD6EE2F0E7E23000FF9FCDDC39AEE12382B28CDD950E408795E81220B8AE98C` | 已构建 |
+| APK（debug） | `APK-发给你/StaticLog-V47-debug.apk` 53.03 MB<br>sha256 `D0EE8B550C7BE6D9A3F1948F7BB21D37B6081A003988501F1585A2F60F4FE3BF` | 已构建 |
 | 源码 | `ztui/app/src/main/java/com/demo/zt/**`（48 个 .kt） | |
-| 自动化测试 | `ztui/app/src/androidTest/**`（`src/test` 274 条 JVM 单测全绿；设备测试 31 条上轮通过，本轮模拟器全掉线未重跑） | |
+| 自动化测试 | `ztui/app/src/androidTest/**`（`src/test` 287 条 JVM 单测全绿；设备测试 31 条上轮通过，本轮模拟器全掉线未重跑） | |
 | 原生库 | `ztui/app/src/main/jniLibs/{arm64-v8a,armeabi-v7a,x86,x86_64}/libadb.so` | 已内置 |
 | 资源包 | `ztui/app/src/main/assets/variants/{6-12g,6-16g,7-12g,7-16g}`（共 20.6 MB） | 已内置 |
 
