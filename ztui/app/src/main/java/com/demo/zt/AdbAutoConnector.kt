@@ -1,6 +1,7 @@
 package com.demo.zt
 
 import android.content.Context
+import android.os.UserManager
 import androidx.lifecycle.Observer
 import com.demo.zt.adb.AdbClient
 import com.demo.zt.adb.AdbKey
@@ -30,13 +31,33 @@ object AdbAutoConnector {
     /** mDNS 找不到时依次尝试的固定端口（adb tcpip 默认 5555）。 */
     private val FALLBACK_PORTS = intArrayOf(5555)
 
-    /** 已配对过（本地存在密钥）。 */
+    /** 已配对过（DE 存储里存在密钥密文）。锁屏态也安全：不会生成新密钥。 */
     fun hasSavedKey(context: Context): Boolean = runCatching {
-        AdbKeyProvider.adbKey(context)
-        true
+        if (isUnlocked(context)) {
+            AdbKeyProvider.adbKey(context)
+            true
+        } else {
+            AdbKeyProvider.adbKeyForBootOrNull(context) != null
+        }
     }.getOrDefault(false)
 
-    private fun key(context: Context): AdbKey = AdbKeyProvider.adbKey(context)
+    private fun isUnlocked(context: Context): Boolean = runCatching {
+        context.getSystemService(UserManager::class.java).isUserUnlocked
+    }.getOrDefault(false)
+
+    /**
+     * 按解锁状态选密钥入口。
+     *
+     * 解锁前**必须**走 [AdbKeyProvider.adbKeyForBootOrNull]：
+     * CE 存储此刻不可读，普通入口读不到密文会当场生成新密钥并写回，
+     * 把原来那把已被 adbd 授权的密钥覆盖掉——下次就再也连不上了。
+     */
+    private fun keyOrNull(context: Context): AdbKey? =
+        if (isUnlocked(context)) {
+            runCatching { AdbKeyProvider.adbKey(context) }.getOrNull()
+        } else {
+            AdbKeyProvider.adbKeyForBootOrNull(context)
+        }
 
     /**
      * 阻塞式自动连接。成功返回 true 并把 client 写入 AdbHolder。
@@ -60,20 +81,10 @@ object AdbAutoConnector {
             onLog("[自动连接] 未发现无线调试服务（mDNS），尝试固定端口")
         }
 
-        // mDNS 在部分 ROM 上不可靠：直接扫本机监听端口再逐个试
-        val scanned = scanListeningPorts()
-        if (scanned.isNotEmpty()) {
-            onLog("[自动连接] mDNS 无结果，扫描到 ${scanned.size} 个本机监听端口：$scanned")
-            for (port in scanned) {
-                onLog("[自动连接] 尝试 127.0.0.1:$port（扫描）")
-                if (tryPort(context, port, onLog)) {
-                    onLog("[自动连接] 扫描命中端口 $port")
-                    return true
-                }
-            }
-        } else {
-            onLog("[自动连接] 未能从 /proc/net/tcp 读到监听端口")
-        }
+        // 端口扫描这条路径在应用身份下是死的：AOSP private/app.te 有
+        // neverallow { appdomain -shell } proc_net_tcp_udp:file *，普通应用
+        // 永远读不到 /proc/net/tcp（解锁后也一样）。保留代码只会白等，直接跳过。
+        onLog("[自动连接] 跳过 /proc/net/tcp 扫描（应用域无读权限，仅 shell 可读）")
 
         for (port in FALLBACK_PORTS) {
             onLog("[自动连接] 尝试 127.0.0.1:$port")
@@ -84,34 +95,18 @@ object AdbAutoConnector {
     }
 
     /**
-     * 从 /proc/net/tcp 与 tcp6 里找出**本机监听**端口。
+     * 这里曾经有一份 `/proc/net/tcp` 端口扫描实现，已删除。
      *
-     * 只取 127.0.0.1 / ::1 上的 LISTEN，并按端口倒序（无线调试端口通常较大）。
-     * 读不到就返回空列表，不抛异常。
+     * 原因：AOSP `system/sepolicy/private/app.te` 里有
+     * `neverallow { appdomain -shell } proc_net_tcp_udp:file *;`
+     * ——普通应用域对 `/proc/net/tcp` 的任何操作都被编译期禁止，
+     * 只有 shell/root 域能读。也就是说这段代码在 `com.demo.zt` 进程里
+     * 永远只返回空列表，解锁后也一样，留着只是白等十几秒。
+     *
+     * 端口发现现在只有两条路：`service.adb.tls.port` 系统属性、mDNS
+     * （`_adb-tls-connect._tcp`）。两者都拿不到就说明 adbd 的 TLS 服务
+     * 没起来，该去查 `adb_wifi_enabled` 和网络信任状态，而不是继续找端口。
      */
-    private fun scanListeningPorts(): List<Int> {
-        val result = sortedSetOf<Int>(compareByDescending { it })
-        for (path in listOf("/proc/net/tcp", "/proc/net/tcp6")) {
-            runCatching {
-                java.io.File(path).forEachLine { line ->
-                    val parts = line.trim().split(Regex("\\s+"))
-                    if (parts.size < 4) return@forEachLine
-                    if (parts[0] == "sl") return@forEachLine          // 表头
-                    // 状态 0A = TCP_LISTEN
-                    if (parts[3] != "0A") return@forEachLine
-                    val local = parts[1]                              // 形如 0100007F:1F90
-                    val ip = local.substringBefore(":")
-                    val portHex = local.substringAfter(":")
-                    // 只接受回环地址：0100007F=127.0.0.1，00000000000000000000000001000000=::1
-                    val loopback = ip == "0100007F" || ip == "00000000000000000000000001000000"
-                    if (!loopback) return@forEachLine
-                    portHex.toIntOrNull(16)?.takeIf { it in 1024..65535 }?.let { result.add(it) }
-                }
-            }
-        }
-        // 最多试 12 个，避免拖太久
-        return result.take(12)
-    }
 
     /** 读取系统属性里的无线调试端口；读不到返回 null。 */
     private fun propertyPort(): Int? = runCatching {
@@ -121,7 +116,12 @@ object AdbAutoConnector {
 
     private fun tryPort(context: Context, port: Int, onLog: (String) -> Unit): Boolean =
         runCatching {
-            val client = AdbClient("127.0.0.1", port, key(context))
+            val adbKey = keyOrNull(context)
+            if (adbKey == null) {
+                onLog("[自动连接] 当前状态没有可用私钥（锁屏且 DE 无密文？），放弃连接")
+                return@runCatching false
+            }
+            val client = AdbClient("127.0.0.1", port, adbKey)
             client.connect()
             val uid = client.runShellPublic("id -u").trim()
             AdbHolder.set(client, port)

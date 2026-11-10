@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.demo.zt.adb.AdbKeyMigration
 
 /**
  * 开机自启入口。
@@ -32,6 +33,8 @@ class BootReceiver : BroadcastReceiver() {
         // 0) 升级用户：把开关从 CE 存储搬到 DE 存储。
         //    不做这步，解锁前读到的是空值，会被判成「未启用」。
         runCatching { AutoBoot.migrateToDeviceProtected(context) }
+        // CE→DE 复制必须解锁后做，锁屏进来时这里会自己跳过。
+        runCatching { AdbKeyMigration.migrate(context) }
 
         // 1) 先恢复无线调试开关——必须在跑载荷之前，否则没有端口可连
         runCatching { WirelessAdbAutoEnabler.onBoot(context) }

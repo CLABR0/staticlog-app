@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.demo.zt.adb.AdbKeyMigration
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.thread
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -102,6 +103,8 @@ class MainActivity : ComponentActivity() {
         val autoRun = intent?.getBooleanExtra(EXTRA_AUTO_RUN, false) ?: false
         // 匿名使用统计：首次报 install，之后每次报 heartbeat；未配置服务器时内部直接返回
         runCatching { com.demo.zt.stats.UsageReporter.reportLaunch(this) }
+        // 兜底：用户打开 App 时若还没迁过，这里补一次。
+        runCatching { AdbKeyMigration.migrate(this) }
         // 把开机轨迹并进界面日志：解锁前发生的事（AppLog 只存内存，会随进程丢失）
         runCatching {
             val trace = BootTrace.read(this)
