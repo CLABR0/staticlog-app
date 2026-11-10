@@ -1,0 +1,20 @@
+[Unit]
+Description=StaticLog usage stats
+After=network.target
+
+[Service]
+Type=simple
+User=staticlog
+WorkingDirectory=/opt/staticlog
+Environment=PORT=8080
+Environment=DB=/opt/staticlog/stats.db
+Environment=STATS_TOKEN=REPLACE_WITH_YOUR_TOKEN
+ExecStart=/usr/bin/python3 /opt/staticlog/staticlog_stats.py
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
