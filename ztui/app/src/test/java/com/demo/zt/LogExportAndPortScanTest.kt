@@ -1,14 +1,16 @@
 package com.demo.zt
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 /**
- * 守卫：debug 包必须能一键导出完整日志；连接必须有 mDNS 之外的兜底。
+ * 守卫：debug 包必须能一键导出完整日志；自动连接不能依赖应用域读不到的东西。
  *
  * 背景：真机一直显示「ADB 未连接」，但没有日志就只能靠猜。
- * 同时 vivo 等 ROM 的 NSD 经常发现不到无线调试服务，需要端口扫描兜底。
+ * 曾经用 `/proc/net/tcp` 扫描作兜底，后来查 AOSP `private/app.te`
+ * 发现普通应用域被 neverallow 禁止读取该文件，这条兜底等于死代码，已删除。
  */
 class LogExportAndPortScanTest {
 
@@ -62,18 +64,20 @@ class LogExportAndPortScanTest {
     }
 
     @Test
-    fun connectorScansLocalPortsWhenMdnsFails() {
+    fun connectorDoesNotDependOnProcNetScan() {
         val s = src("AdbAutoConnector.kt")
-        assertTrue("应读取 /proc/net/tcp 找监听端口", s.contains("/proc/net/tcp"))
-        assertTrue("只接受 LISTEN 状态", s.contains("\"0A\""))
-        assertTrue("只接受回环地址", s.contains("0100007F"))
-        assertTrue("扫描结果要有限制，避免太慢", s.contains("take(12)"))
+        // AOSP private/app.te 有 neverallow { appdomain -shell } proc_net_tcp_udp:file *，
+        // 普通应用读不到 /proc/net/tcp，所以这条路径必须删掉而不是留作兜底。
+        assertFalse("不应再调用端口扫描", s.contains("scanListeningPorts()"))
+        assertTrue("要写明为什么放弃扫描", s.contains("应用域无读权限"))
+        assertTrue("要指明只有 shell 域能读", s.contains("仅 shell 可读"))
     }
 
     @Test
-    fun scanReportsWhatItFound() {
+    fun scanSkipPointsAtRealCauses() {
         val s = src("AdbAutoConnector.kt")
-        assertTrue("扫描到端口要写日志", s.contains("扫描到 "))
-        assertTrue("没读到也要写日志", s.contains("未能从 /proc/net/tcp"))
+        assertTrue("跳过扫描要写日志", s.contains("跳过 /proc/net/tcp 扫描"))
+        // 端口拿不到时要引导去看 adb_wifi_enabled，而不是继续找端口
+        assertTrue("注释里要指向真正的原因", s.contains("adb_wifi_enabled"))
     }
 }
