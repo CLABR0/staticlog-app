@@ -38,7 +38,7 @@ import javax.net.ssl.X509ExtendedTrustManager
 
 private const val TAG = "AdbKey"
 
-class AdbKey(private val adbKeyStore: AdbKeyStore, name: String) {
+class AdbKey(private val adbKeyStore: AdbKeyStore, name: String, private val allowGenerate: Boolean = true) {
 
     companion object {
 
@@ -166,6 +166,8 @@ class AdbKey(private val adbKeyStore: AdbKeyStore, name: String) {
         }
         
         if (privateKey == null) {
+            // 锁屏时缺失或解密失败都不代表用户从未配对，生成新密钥会破坏原有授权。
+            check(allowGenerate) { "锁屏态且无可用密钥，拒绝生成新密钥以免覆盖已授权密钥" }
             val keyPairGenerator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA)
             keyPairGenerator.initialize(RSAKeyGenParameterSpec(2048, RSAKeyGenParameterSpec.F4))
             val keyPair = keyPairGenerator.generateKeyPair()
